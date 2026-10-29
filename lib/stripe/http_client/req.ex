@@ -13,17 +13,40 @@ if Code.ensure_loaded?(Req) do
 
             config :stripity_stripe, req_opts: [receive_timeout: 5000, connect_options: [timeout: 1000]]
 
-      * `:use_connection_pool` and `:pool_options` – see "HTTP Connection Pool" in `Stripe`. The
-        pool is a Finch pool named `Stripe.Finch`: `:max_connections` sets its `:size` and
-        `:timeout` sets its `:conn_max_idle_time`. Req doesn't allow `:connect_options` with a
-        named pool, so when `:connect_options` or `:finch` is given, Req picks the pool instead.
-        With `use_connection_pool: false`, Req's default pool is used.
+      * `:use_connection_pool` and `:pool_options` – see "HTTP Connection Pool" in `Stripe`. By
+        default, requests use a Finch pool named `Stripe.Finch`: `:max_connections` sets its
+        `:size` and `:timeout` sets its `:conn_max_idle_time`.
+
+        To use your app's own Finch pool instead, name it in `:req_opts` and turn off
+        `Stripe.Finch` so it isn't started:
+
+            config :stripity_stripe,
+              use_connection_pool: false,
+              req_opts: [finch: [name: MyApp.Finch]]
+
+        Req doesn't allow `:connect_options` with a named pool, so when `:req_opts` sets
+        `:connect_options`, `Stripe.Finch` is skipped and Req starts a pool for those options.
+        With `use_connection_pool: false` and no `:finch` option, Req's default pool is used.
 
     Options passed to individual `Stripe` calls that `Stripe.API` doesn't handle are passed on
     to Req, so they must be valid Req options.
 
     `Stripe.API` retries requests itself (see the `:retries` config), so Req's `:retry` and
     `:redirect` are off by default. Response bodies are always returned undecoded.
+
+    ## Testing
+
+    Stripe calls can be stubbed with `Req.Test`:
+
+        # config/test.exs
+        config :stripity_stripe, req_opts: [plug: {Req.Test, MyApp.Stripe}]
+
+        # in a test
+        Req.Test.stub(MyApp.Stripe, fn conn ->
+          Req.Test.json(conn, %{"object" => "customer", "id" => "cus_123"})
+        end)
+
+        Req.Test.stub(MyApp.Stripe, &Req.Test.transport_error(&1, :econnrefused))
     """
 
     @behaviour Stripe.HTTPClient
